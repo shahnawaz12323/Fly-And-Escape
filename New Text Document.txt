@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flappy Bird</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body, html {
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #70c5ce;
+        }
+
+        #game-container {
+            position: relative;
+        }
+
+        canvas {
+            border: 2px solid black;
+            background-color: #70c5ce;
+        }
+
+        #gameOver {
+            text-align: center;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+        <div id="gameOver" style="display: none;">
+            <h1>Game Over</h1>
+            <button onclick="restartGame()">Restart</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const gameOverDiv = document.getElementById('gameOver');
+
+        canvas.width = 400;
+        canvas.height = 600;
+
+        let bird;
+        let pipes = [];
+        let score = 0;
+        let gameOver = false;
+
+        const GRAVITY = 0.25;
+        const FLAP_STRENGTH = -4.5;
+        const PIPE_WIDTH = 50;
+        const PIPE_SPACING = 150; // The minimum gap height between pipes
+        const MIN_GAP_HEIGHT = 100; // The guaranteed minimum gap for the bird to pass through
+
+        // Load images for textures
+        const birdImage = new Image();
+        const pipeImage = new Image();
+        const backgroundImage = new Image();
+
+        // Use event listeners to ensure images are fully loaded before using them
+        let imagesLoaded = 0;
+        const totalImages = 3;
+
+        function checkImagesLoaded() {
+            imagesLoaded++;
+            if (imagesLoaded === totalImages) {
+                startGame();
+            }
+        }
+
+        birdImage.src = 'bird.png';  // Replace with actual image path
+        birdImage.onload = checkImagesLoaded;
+
+        pipeImage.src = 'pipe.png';  // Replace with actual image path
+        pipeImage.onload = checkImagesLoaded;
+
+        backgroundImage.src = 'background.png';  // Replace with actual image path
+        backgroundImage.onload = checkImagesLoaded;
+
+        // Initialize event listeners after images are loaded
+        function startGame() {
+            bird = new Bird();
+            document.addEventListener('keydown', flapBird);
+            document.addEventListener('click', flapBird);
+            animate();
+        }
+
+        function flapBird() {
+            if (gameOver || !bird) return;
+            bird.velocity = FLAP_STRENGTH;
+        }
+
+        function Bird() {
+            this.x = 50;
+            this.y = canvas.height / 2;
+            this.width = 40;  // Adjust size based on the image
+            this.height = 40;  // Adjust size based on the image
+            this.velocity = 0;
+            this.update = function() {
+                this.velocity += GRAVITY;
+                this.y += this.velocity;
+                if (this.y + this.height > canvas.height) {
+                    gameOverState();
+                }
+            };
+            this.draw = function() {
+                ctx.drawImage(birdImage, this.x, this.y, this.width, this.height);
+            };
+        }
+
+        function Pipe() {
+            this.width = PIPE_WIDTH;
+
+            // Ensure the gap is wide enough (top and bottom pipe heights adjusted accordingly)
+            const topHeight = Math.floor(Math.random() * (canvas.height - MIN_GAP_HEIGHT - PIPE_SPACING));
+            this.topHeight = topHeight;
+            this.bottomHeight = canvas.height - topHeight - PIPE_SPACING;
+
+            // If the gap is too small, move the bottom pipe down to fix the issue
+            if (this.bottomHeight < MIN_GAP_HEIGHT) {
+                this.topHeight = canvas.height - MIN_GAP_HEIGHT - PIPE_SPACING;
+                this.bottomHeight = MIN_GAP_HEIGHT;
+            }
+
+            this.x = canvas.width;
+
+            this.update = function() {
+                this.x -= 2; // Move the pipe to the left
+            };
+
+            this.draw = function() {
+                ctx.drawImage(pipeImage, this.x, 0, this.width, this.topHeight); // Top pipe
+                ctx.drawImage(pipeImage, this.x, canvas.height - this.bottomHeight, this.width, this.bottomHeight); // Bottom pipe
+            };
+        }
+
+        function detectCollision(pipe) {
+            if (bird.x + bird.width > pipe.x && bird.x < pipe.x + pipe.width) {
+                if (bird.y < pipe.topHeight || bird.y + bird.height > canvas.height - pipe.bottomHeight) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function gameOverState() {
+            gameOver = true;
+            gameOverDiv.style.display = 'block';
+        }
+
+        function restartGame() {
+            bird = new Bird();
+            pipes = [];
+            score = 0;
+            gameOver = false;
+            gameOverDiv.style.display = 'none';
+            animate();
+        }
+
+        function animate() {
+            if (gameOver) return;
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(backgroundImage, 0, 0, canvas.width, canvas.height); // Draw background
+            bird.update();
+            bird.draw();
+
+            // Create new pipes with some randomness to their appearance
+            if (Math.random() < 0.02) {
+                pipes.push(new Pipe());
+            }
+
+            // Update and draw pipes
+            pipes.forEach((pipe, index) => {
+                pipe.update();
+                pipe.draw();
+
+                // Remove pipes when they go off-screen
+                if (pipe.x + pipe.width < 0) {
+                    pipes.splice(index, 1);
+                    score++;
+                }
+
+                // Check for collision with the pipes
+                if (detectCollision(pipe)) {
+                    gameOverState();
+                }
+            });
+
+            // Display score
+            ctx.fillStyle = 'black';
+            ctx.font = '20px Arial';
+            ctx.fillText('Score: ' + score, 10, 30);
+
+            // Continue the animation
+            requestAnimationFrame(animate);
+        }
+    </script>
+</body>
+</html>
